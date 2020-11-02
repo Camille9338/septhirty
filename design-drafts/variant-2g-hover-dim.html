@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shunit Haviv Hakimi</title>
+  <meta name="description" content="Shunit Haviv Hakimi, Applied Scientist building new things at the intersection of AI, audio, and video." />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Shunit Haviv Hakimi" />
+  <meta property="og:description" content="Applied Scientist building new things at the intersection of AI, audio, and video." />
+  <meta property="og:url" content="https://shunit.ai" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://i.scdn.co" />
+  <link href="https://fonts.googleapis.com/css2?family=Recursive:CASL,CRSV,MONO,slnt,wght@0..1,0..1,0..1,-15..0,300..1000&amp;display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      /* Light matte reissue jacket: warm cream stock, dark ink */
+      --stock: oklch(95% 0.014 88);
+      --stock-edge: oklch(90% 0.018 86);
+      --ink: oklch(29% 0.018 292);
+      --muted: oklch(48% 0.02 293);
+      --faint: oklch(46% 0.02 293 / 0.5);
+      --line: oklch(29% 0.018 292 / 0.16);
+      --hair: oklch(29% 0.018 292 / 0.09);
+      --accent: oklch(52% 0.16 295);
+      --accent-soft: oklch(52% 0.16 295 / 0.12);
+      --focus: oklch(52% 0.16 295 / 0.75);
+
+      /* Wall stays rich and dark so the covers glow and the cream jacket pops */
+      --bg-0: oklch(15% 0.03 292);
+      --bg-1: oklch(10% 0.025 292);
+
+      /* Interactive room-lights: the dim veil crossfades between these two
+         opacities. Rest keeps the wall lively (close to 2f); active drops it
+         into 2e-style ambient shadow when the pointer/focus enters the sleeve.
+         Touch devices sit at a static middle ground (see hover:none below). */
+      --dim-rest: 0.12;
+      --dim-active: 0.78;
+      --dim-mid: 0.42;
+      --dim-ease: cubic-bezier(0.16, 1, 0.3, 1); /* exponential ease-out */
+      --dim-dur: 560ms;
+
+      --col-w: clamp(118px, 19vw, 176px);
+      --gap: clamp(10px, 1.4vw, 16px);
+
+      /* Disciplined type scale: four steps at ~1.25 ratio, nothing functional
+         below 13.6px rendered. */
+      --fs-label: 0.85rem;    /* 13.6px  micro labels, track index, meta */
+      --fs-body: 1.0625rem;   /* 17px    running text */
+      --fs-h2: 1.33rem;       /* 21.3px  section headings */
+      --fs-display: clamp(2.35rem, 6.5vw, 4rem);
+
+      /* Shared right-edge media column for the two feature blocks */
+      --media-w: clamp(8.5rem, 24vw, 12rem);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg-1);
+      color: var(--ink);
+      font-family: "Recursive", system-ui, -apple-system, sans-serif;
+      font-size: 1.0625rem;
+      font-weight: 400;
+      font-variation-settings: "MONO" 0, "CASL" 0.15;
+      line-height: 1.6;
+      font-kerning: normal;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ---------- Drifting album wall (fixed ambient background) ---------- */
+    .wall {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      gap: var(--gap);
+      padding: 0;
+      /* bleed: columns run taller than the viewport on both ends */
+      background: var(--bg-0);
+      pointer-events: none;
+      /* Rest: the wall keeps most of its color and luminance so the covers stay
+         lively (close to 2f), only gently settled so the cream sleeve still
+         reads. The heavy 2e-style darkening is applied interactively by the
+         crossfading .wall-dim veil below, never by transitioning this filter. */
+      filter: saturate(0.86) brightness(0.78) contrast(0.95);
+    }
+
+    .wall-col {
+      flex: 0 0 var(--col-w);
+      width: var(--col-w);
+      /* pull the column above the fold so tiles bleed off the top edge */
+      margin-top: -22vh;
+      will-change: transform;
+    }
+
+    .wall-track {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      animation: driftUp var(--dur, 180s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      will-change: transform;
+    }
+    .wall-col[data-dir="down"] .wall-track { animation-direction: reverse; }
+
+    @keyframes driftUp {
+      from { transform: translate3d(0, 0, 0); }
+      to   { transform: translate3d(0, -50%, 0); }
+    }
+
+    .wall-tile {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 6px;
+      background: oklch(24% 0.02 292);
+      box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Interactive dim veil: a near-flat dark layer that crossfades its opacity
+       between rest and active. Only opacity animates, so the transition is a
+       cheap compositor-only crossfade that holds 60fps while the wall drifts.
+       It carries all the room-lights-drop motion; the wall filter never moves. */
+    .wall-dim {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(120% 95% at 50% 42%, oklch(8% 0.02 292 / 0.86) 0%, oklch(4% 0.015 292 / 1) 100%);
+      opacity: var(--dim-rest);
+      transition: opacity var(--dim-dur) var(--dim-ease);
+      will-change: opacity;
+    }
+    body.dimmed .wall-dim { opacity: var(--dim-active); }
+
+    /* Scrim: a constant moderate vignette that pools light on the sleeve. It sits
+       between 2f's gentle wash and 2e's heavy pool, and stays put across states
+       so the pool never breathes; only the veil above drops the room lights. */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        radial-gradient(125% 100% at 42% 34%, oklch(12% 0.02 292 / 0.1) 0%, oklch(9% 0.02 292 / 0.36) 60%, oklch(6% 0.015 292 / 0.64) 100%);
+    }
+
+    /* ---------- Foreground content ---------- */
+    .page {
+      position: relative;
+      z-index: 3;
+      max-width: 60rem;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100svh;
+      padding: clamp(2rem, 8vh, 6rem) clamp(1rem, 5vw, 3rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    /* ---------- Album-sleeve card (light matte reissue jacket) ---------- */
+    .sleeve {
+      position: relative;
+      align-self: center;
+      width: 100%;
+      max-width: 46rem;
+      isolation: isolate;
+      display: grid;
+      grid-template-columns: clamp(2.5rem, 5.5vw, 3.4rem) minmax(0, 1fr);
+      border-radius: 7px;
+      /* Commit to soft elevation, not a hairline edge: the jacket is a physical
+         object floating on a dark shelf. Layered contact + cast shadow only. */
+      background:
+        linear-gradient(158deg, oklch(96% 0.013 88) 0%, var(--stock) 60%, oklch(93% 0.016 86) 100%);
+      box-shadow:
+        0 4px 10px -2px rgba(10, 6, 26, 0.45),
+        0 30px 60px -24px rgba(8, 4, 22, 0.72),
+        0 80px 150px -50px rgba(4, 2, 16, 0.85),
+        inset 0 1px 0 0 oklch(100% 0 0 / 0.55),
+        inset 0 -1px 0 0 oklch(60% 0.02 290 / 0.12);
+    }
+    /* very faint paper grain, only over the jacket, never over the text */
+    .sleeve::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0.04;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 150px 150px;
+    }
+
+    /* Spine: a quiet printed left channel with the vertical name (signature move) */
+    .spine {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.1rem 0;
+      border-right: 1px solid var(--hair);
+      border-radius: 7px 0 0 7px;
+      background: linear-gradient(90deg, oklch(89% 0.02 86 / 0.9), oklch(95% 0.014 88 / 0) 88%);
+    }
+    .spine span {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      white-space: nowrap;
+      font-variation-settings: "MONO" 1, "CASL" 0;
+      font-weight: 600;
+      font-size: 0.72rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    .face {
+      position: relative;
+      z-index: 1;
+      padding: clamp(1.7rem, 5vw, 3.1rem) clamp(1.5rem, 5vw, 3rem);
+      border-radius: 0 7px 7px 0;
+    }
+
+    main { width: 100%; }
+
+    h1 {
+      font-weight: 700;
+      font-variation-settings: "MONO" 0, "CASL" 0;
+      font-size: var(--fs-display);
+      line-height: 1;
+      letter-spacing: -0.035em;
+      margin: 0 0 1.3rem;
+      color: oklch(24% 0.02 292);
+      text-wrap: balance;
+    }
+
+    /* Liner notes: the about text, set like sleeve annotation (no drop cap) */
+    .about {
+      max-width: 56ch;
+      margin: 0 0 2.4rem;
+      padding-top: 1.3rem;
+      border-top: 1px solid var(--line);
+      color: var(--ink);
+      font-variation-settings: "MONO" 0, "CASL" 0.4;
+      text-wrap: pretty;
+    }
+
+    /* One quiet, sentence-case section heading for everything below the header.
+       No mono-uppercase micro-label costume, no record-catalog language. */
+    .section-title {
+      margin: clamp(2.2rem, 5.5vh, 3rem) 0 1.1rem;
+      font-size: var(--fs-h2);
+      font-weight: 620;
+      font-variation-settings: "MONO" 0, "CASL" 0;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      color: var(--ink);
+      text-wrap: balance;
+    }
+    /* The Profiles heading is the page's "start here" — give it the accent tick. */
+    .section-title.primary {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+    }
+    .section-title.primary::before {
+      content: "";
+      width: 0.62rem;
+      height: 0.62rem;
+      border-radius: 2px;
+      background: var(--accent);
+      transform: translateY(0.02em);
+    }
+
+    /* Tracklist: profile links keep the sleeve leader-dot treatment. This is the
+       primary action block, so the rows are generous, tappable targets. */
+    .tracklist {
+      display: grid;
+      gap: 0.1rem;
+    }
+    .track {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: baseline;
+      gap: 0.7rem;
+      padding: 0.7rem 0;
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--hair);
+    }
+    .track:last-child { border-bottom: 0; }
+    .track .ttl {
+      font-size: var(--fs-body);
+      font-weight: 580;
+      transition: color 0.28s ease-out;
+    }
+    .track .lead {
+      align-self: end;
+      transform: translateY(-0.35em);
+      border-bottom: 1.5px dotted var(--line);
+      transition: border-color 0.28s ease-out;
+    }
+    .track .go {
+      font-variation-settings: "MONO" 1, "CASL" 0;
+      font-size: var(--fs-label);
+      color: var(--muted);
+      transition: color 0.28s ease-out, transform 0.28s ease-out;
+    }
+    .track:hover .ttl { color: var(--accent); }
+    .track:hover .lead { border-bottom-color: color-mix(in oklch, var(--accent) 60%, transparent); }
+    .track:hover .go { color: var(--accent); transform: translateX(2px); }
+
+    .papers {
+      margin-top: 0.5rem;
+    }
+
+    .papers ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1.4rem;
+    }
+    .papers li {
+      position: relative;
+    }
+
+    .paper-title { font-weight: 560; }
+
+    .paper-title a {
+      color: var(--ink);
+      text-decoration: none;
+      background: linear-gradient(var(--accent), var(--accent)) left bottom / 100% 1.5px no-repeat;
+      padding-bottom: 1px;
+      transition: color 0.28s ease-out;
+    }
+    .paper-title a:hover { color: var(--accent); }
+
+    .paper-authors {
+      font-size: var(--fs-label);
+      color: var(--muted);
+      margin: 0.1rem 0 0.15rem;
+    }
+    .paper-authors strong { font-weight: 600; color: var(--ink); }
+
+    .paper-meta {
+      font-size: var(--fs-label);
+      color: var(--muted);
+      font-variation-settings: "MONO" 0, "CASL" 0;
+      letter-spacing: 0;
+    }
+
+    /* Best Paper: plain emphasis, not a stamped pill */
+    .award {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Feature blocks (brag, BebopNet): one content column, one shared right edge.
+       Text left, equal-size square media right, media top-aligned with its text. */
+    .feature {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--media-w);
+      gap: clamp(1.25rem, 4vw, 2.4rem);
+      align-items: start;
+    }
+    .feature .txt p {
+      margin: 0;
+      max-width: 44ch;
+      color: var(--muted);
+      font-size: var(--fs-body);
+    }
+    .feature .media {
+      grid-column: 2;
+      width: var(--media-w);
+      height: var(--media-w);
+      object-fit: cover;
+      border-radius: 4px;
+      background: oklch(88% 0.016 86);
+      display: block;
+      box-shadow: 0 18px 34px -18px rgba(8, 4, 22, 0.6);
+    }
+
+    /* Meta row: the six BebopNet destinations, presented as a compact link row */
+    .meta-row {
+      margin: 0.7rem 0 0;
+      color: var(--muted);
+      font-size: var(--fs-label);
+    }
+
+    /* Single inline-link treatment (accent underline) used everywhere below the
+       header, so at most two link styles exist (this + the tracklist rows). */
+    .feature .txt a,
+    .paper-title a,
+    .paper-meta a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in oklch, var(--accent) 42%, transparent);
+      text-decoration-thickness: 1.5px;
+      text-underline-offset: 3px;
+      transition: color 0.24s ease-out, text-decoration-color 0.24s ease-out;
+    }
+    .feature .txt a:hover,
+    .paper-title a:hover,
+    .paper-meta a:hover {
+      color: var(--accent);
+      text-decoration-color: var(--accent);
+    }
+
+    /* Star button, restyled to belong to the cream + accent palette */
+    a.gh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      vertical-align: middle;
+      transform: translateY(-1px);
+      margin: 0 2px;
+      font: 600 var(--fs-label)/1 "Recursive", system-ui, sans-serif;
+      font-variation-settings: "MONO" 0, "CASL" 0;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid color-mix(in oklch, var(--accent) 26%, transparent);
+      border-radius: 5px;
+      padding: 3px 9px 4px;
+      text-decoration: none;
+      transition: background 0.24s ease-out;
+    }
+    a.gh-btn:hover { background: color-mix(in oklch, var(--accent) 16%, transparent); }
+    .gh-btn svg { fill: currentColor; flex: none; }
+    .gh-count {
+      color: var(--muted);
+      padding-left: 6px;
+      margin-left: 2px;
+      border-left: 1px solid color-mix(in oklch, var(--accent) 24%, transparent);
+    }
+
+    /* Mobile: fold the spine into a top masthead, stack the jacket */
+    @media (max-width: 640px) {
+      .sleeve { grid-template-columns: minmax(0, 1fr); }
+      .spine {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 0.9rem;
+        padding: 0.7rem 1.2rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--hair);
+        border-radius: 7px 7px 0 0;
+        background: linear-gradient(180deg, oklch(90% 0.02 86 / 0.9), oklch(95% 0.014 88 / 0) 100%);
+      }
+      .spine span {
+        writing-mode: horizontal-tb;
+        transform: none;
+        font-size: 0.62rem;
+        letter-spacing: 0.22em;
+      }
+      .face {
+        border-radius: 0 0 7px 7px;
+      }
+      /* Feature blocks stack: text first in reading order, media below */
+      .feature {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.1rem;
+      }
+      .feature .media {
+        grid-column: 1;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        max-width: 15rem;
+      }
+    }
+
+    a:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 4px;
+      border-radius: 3px;
+    }
+
+    /* No-hover (touch) devices: there is no pointer to pick up the record, so the
+       veil rests at a static middle ground between the two scrim levels, readable
+       without the interaction. Focus-driven dimming is neutralized here too. */
+    @media (hover: none) {
+      .wall-dim,
+      body.dimmed .wall-dim { opacity: var(--dim-mid); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .wall-track { animation: none !important; }
+      /* The crossfade becomes instant, but the hover/focus dim still works. */
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wall" id="wall" aria-hidden="true"></div>
+  <div class="wall-dim" aria-hidden="true"></div>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <div class="page">
+    <div class="sleeve">
+      <div class="spine" aria-hidden="true">
+        <span>SHH &middot; No. 01 &middot; 2026</span>
+      </div>
+      <div class="face">
+      <main>
+        <h1>Shunit Haviv Hakimi</h1>
+        <p class="about">I'm building new things at the intersection of AI, audio, and video. Most recently I was an Applied Scientist at Amazon, working on Prime Video's automatic recaps. My MSc research at the Technion used deep learning to generate personalized jazz improvisations. When I'm not working, I'm probably playing or listening to music.</p>
+
+        <h2 class="section-title primary">Profiles</h2>
+        <nav class="tracklist" aria-label="Profiles">
+          <a class="track" href="https://github.com/shunithaviv"><span class="ttl">GitHub</span><span class="lead" aria-hidden="true"></span><span class="go" aria-hidden="true">&#8599;</span></a>
+          <a class="track" href="https://www.linkedin.com/in/shunit-haviv/"><span class="ttl">LinkedIn</span><span class="lead" aria-hidden="true"></span><span class="go" aria-hidden="true">&#8599;</span></a>
+          <a class="track" href="https://scholar.google.com/citations?user=8Lq4xU0AAAAJ"><span class="ttl">Scholar</span><span class="lead" aria-hidden="true"></span><span class="go" aria-hidden="true">&#8599;</span></a>
+        </nav>
+
+        <h2 class="section-title">brag</h2>
+        <section class="feature" aria-label="brag">
+          <div class="txt">
+            <p><a href="https://latent-spaces.github.io/brag/">/brag</a> is a skill I built that turns your project into a short launch video. Check it out <a href="https://github.com/latent-spaces/brag">here</a> <a class="gh-btn" href="https://github.com/latent-spaces/brag"><svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>GitHub<span class="gh-count" hidden><span aria-hidden="true">&#9733;</span> <span class="stars-num"></span></span></a>.</p>
+          </div>
+          <video class="media" src="assets/brag.mp4" autoplay muted loop playsinline aria-label="Looping clip of brag"></video>
+        </section>
+
+        <h2 class="section-title">BebopNet</h2>
+        <section class="feature" aria-label="BebopNet">
+          <div class="txt">
+            <p><a href="https://shunithaviv.github.io/bebopnet/">BebopNet</a> improvises jazz. Hear the <a href="https://shunithaviv.github.io/bebopnet/">samples</a>, watch the <a href="https://www.youtube.com/watch?v=oNJmBT6eYBU">video</a>, read the <a href="https://archives.ismir.net/ismir2020/paper/000132.pdf">paper</a> or the <a href="https://towardsdatascience.com/bebopnet-neural-models-for-jazz-improvisations-4a4d723d0b60">blog post</a>, or browse the <a href="https://github.com/shunithaviv/bebopnet-code">code</a>.</p>
+          </div>
+          <img class="media" src="assets/bebopnet-thumb.jpg" alt="BebopNet ISMIR 2020 title slide" loading="lazy" />
+        </section>
+
+        <section class="papers" aria-label="Papers">
+          <h2 class="section-title">Papers</h2>
+          <ul>
+            <li>
+              <div class="paper-title"><a href="https://archives.ismir.net/ismir2020/paper/000132.pdf">BebopNet: Deep Neural Models for Personalized Jazz Improvisations</a></div>
+              <div class="paper-authors"><strong>Shunit Haviv Hakimi</strong>, Nadav Bhonker, Ran El-Yaniv</div>
+              <div class="paper-meta">ISMIR 2020 &middot; <span class="award">Best Paper</span> &middot; <a href="https://shunithaviv.github.io/bebopnet/">demo</a> &middot; <a href="https://github.com/shunithaviv/bebopnet-code">code</a></div>
+            </li>
+            <li>
+              <div class="paper-title"><a href="https://aclanthology.org/2025.emnlp-main.1649/">Group-Aware Reinforcement Learning for Output Diversity in Large Language Models</a></div>
+              <div class="paper-authors">Oron Anschel, Alon Shoshan, Adam Botach, <strong>Shunit Haviv Hakimi</strong>, Asaf Gendler, Emanuel Ben Baruch, Nadav Bhonker, Igor Kviatkovsky, Manoj Aggarwal, Gerard Medioni</div>
+              <div class="paper-meta">EMNLP 2025 &middot; <a href="https://arxiv.org/abs/2511.12596">arXiv</a></div>
+            </li>
+            <li>
+              <div class="paper-title"><a href="https://arxiv.org/abs/2512.21778">Scene-VLM: Multimodal Video Scene Segmentation via Vision-Language Models</a></div>
+              <div class="paper-authors">Nimrod Berman, Adam Botach, Emanuel Ben-Baruch, <strong>Shunit Haviv Hakimi</strong>, Asaf Gendler, Ilan Naiman, Erez Yosef, Igor Kviatkovsky</div>
+              <div class="paper-meta">CVPR 2026 &middot; <a href="https://arxiv.org/abs/2512.21778">arXiv</a></div>
+            </li>
+          </ul>
+        </section>
+      </main>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Room lights: hovering or focusing into the sleeve drops the wall into
+    // 2e-style ambient shadow by fading the .wall-dim veil up; leaving brings it
+    // back. mouseenter/mouseleave fire only for the jacket itself (they do not
+    // bubble from children), so it is the sleeve, not the whole page, that dims.
+    (function sleeveDim() {
+      const sleeve = document.querySelector(".sleeve");
+      if (!sleeve) return;
+      let hovering = false;
+      let focusing = false;
+      function sync() {
+        document.body.classList.toggle("dimmed", hovering || focusing);
+      }
+      sleeve.addEventListener("mouseenter", function () { hovering = true; sync(); });
+      sleeve.addEventListener("mouseleave", function () { hovering = false; sync(); });
+      // Keyboard parity: focus entering any control inside the sleeve dims too.
+      sleeve.addEventListener("focusin", function () { focusing = true; sync(); });
+      sleeve.addEventListener("focusout", function (e) {
+        if (!sleeve.contains(e.relatedTarget)) { focusing = false; sync(); }
+      });
+    })();
+  </script>
+
+  <script>
+    // Star count for /brag
+    fetch("https://api.github.com/repos/latent-spaces/brag")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && typeof d.stargazers_count === "number") {
+          document.querySelectorAll(".stars-num").forEach(function (el) {
+            el.textContent = d.stargazers_count.toLocaleString("en-US");
+          });
+          // Only reveal the count chip once a real number has loaded.
+          document.querySelectorAll(".gh-count").forEach(function (el) {
+            el.hidden = false;
+          });
+        }
+      })
+      .catch(function () {
+        // On failure, leave the count hidden rather than showing a stale number.
+      });
+  </script>
+
+  <script>
+    // Saved albums: cover300 art drives the drifting wall behind the panel.
+    const ALBUMS = [{"a":"Bad Bunny","t":"DeBÍ TiRAR MáS FOToS","c":"https://i.scdn.co/image/ab67616d00001e02bbd45c8d36e0e045ef640411"},{"a":"Alice In Chains","t":"Jar Of Flies","c":"https://i.scdn.co/image/ab67616d00001e0225b42be683b8d3c6500db726"},{"a":"Bala Desejo","t":"SIM SIM SIM","c":"https://i.scdn.co/image/ab67616d00001e0292940ca6fb5dccda32bf06bd"},{"a":"Coldplay","t":"Parachutes","c":"https://i.scdn.co/image/ab67616d00001e029164bafe9aaa168d93f4816a"},{"a":"Coldplay","t":"The Blue Room","c":"https://i.scdn.co/image/ab67616d00001e02124a7215716375bcff8d6ecd"},{"a":"Kendrick Lamar","t":"To Pimp A Butterfly","c":"https://i.scdn.co/image/ab67616d00001e02cdb645498cd3d8a2db4d05e1"},{"a":"Kendrick Lamar","t":"DAMN.","c":"https://i.scdn.co/image/ab67616d00001e028b52c6b9bc4e43d873869699"},{"a":"Radiohead","t":"OK Computer","c":"https://i.scdn.co/image/ab67616d00001e02c8b444df094279e70d0ed856"},{"a":"RAYE","t":"THIS MUSIC MAY CONTAIN HOPE.","c":"https://i.scdn.co/image/ab67616d00001e0297c0928704e5a2bd8d4c5b90"},{"a":"Yebba","t":"Jean","c":"https://i.scdn.co/image/ab67616d00001e025932b2362d978f6fa10ca63e"},{"a":"Flea","t":"Honora","c":"https://i.scdn.co/image/ab67616d00001e02017eb062be58097ec134eeb6"},{"a":"Gang of Youths","t":"Go Farther In Lightness","c":"https://i.scdn.co/image/ab67616d00001e02a2329c84c1421041f06a7ad5"},{"a":"i///u","t":"Waiting Test","c":"https://i.scdn.co/image/ab67616d00001e020480cf48c1704abd26711911"},{"a":"Vulfmon","t":"Deg","c":"https://i.scdn.co/image/ab67616d00001e02185b779570241a3f524f0e55"},{"a":"Florence + The Machine","t":"Everybody Scream","c":"https://i.scdn.co/image/ab67616d00001e0206272cebe18d71e7e4629a38"},{"a":"Khruangbin","t":"The Universe Smiles Upon You ii","c":"https://i.scdn.co/image/ab67616d00001e020ecc9c792f2ccc2afe81d1d9"},{"a":"Sabrina Carpenter","t":"Short n' Sweet","c":"https://i.scdn.co/image/ab67616d00001e02fd8d7a8d96871e791cb1f626"},{"a":"Sabrina Carpenter","t":"Man’s Best Friend","c":"https://i.scdn.co/image/ab67616d00001e02b1863bf95557ea7f357c4947"},{"a":"ODESZA","t":"Music To Refine To: A Remix Companion to Severance","c":"https://i.scdn.co/image/ab67616d00001e02183bc8483f5f44416c608ca9"},{"a":"Nick Drake","t":"Bryter Layter","c":"https://i.scdn.co/image/ab67616d00001e022062d15bea2602a8a2cfe8b7"},{"a":"Dua Lipa","t":"Radical Optimism","c":"https://i.scdn.co/image/ab67616d00001e022f8790ed72296c2614607575"},{"a":"Noga Erez","t":"THE VANDALIST","c":"https://i.scdn.co/image/ab67616d00001e02f87463ba32b7b976ad5a3a59"},{"a":"Beyoncé","t":"RENAISSANCE","c":"https://i.scdn.co/image/ab67616d00001e0269a3c061676c2020adfe8315"},{"a":"Dua Lipa","t":"Radical Optimism","c":"https://i.scdn.co/image/ab67616d00001e0214c1ff1e31bc3313248dbe60"},{"a":"Alicia Keys","t":"The Diary Of Alicia Keys","c":"https://i.scdn.co/image/ab67616d00001e0256ff19308ebeb48e2ba6094b"},{"a":"Daft Punk","t":"Random Access Memories","c":"https://i.scdn.co/image/ab67616d00001e029b9b36b0e22870b9f542d937"},{"a":"Bon Iver","t":"For Emma, Forever Ago","c":"https://i.scdn.co/image/ab67616d00001e02bf7c317a63c4f128b8823406"},{"a":"Oasis","t":"(What's The Story) Morning Glory?","c":"https://i.scdn.co/image/ab67616d00001e02feea40e4d87f31a313c79ed8"},{"a":"Imagine Dragons","t":"Mercury - Acts 1 & 2","c":"https://i.scdn.co/image/ab67616d00001e02fc915b69600dce2991a61f13"},{"a":"Beyoncé","t":"RENAISSANCE","c":"https://i.scdn.co/image/ab67616d00001e021a93f2b852d8da8c55dde85d"},{"a":"Nothing But Thieves","t":"Dead Club City","c":"https://i.scdn.co/image/ab67616d00001e025340930dd48fb071fe422510"},{"a":"Nothing But Thieves","t":"Nothing But Thieves (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e029eedbac74aec7609be574941"},{"a":"Arctic Monkeys","t":"The Car","c":"https://i.scdn.co/image/ab67616d00001e0207823ee6237208c835802663"},{"a":"Ben Howard","t":"Couldn't Make It Up","c":"https://i.scdn.co/image/ab67616d00001e02c376c7e30bf3c90ec58308b3"},{"a":"Tyler, The Creator","t":"CALL ME IF YOU GET LOST","c":"https://i.scdn.co/image/ab67616d00001e02940aa635eea98719f6ca4ad9"},{"a":"Tyler, The Creator","t":"CALL ME IF YOU GET LOST: The Estate Sale","c":"https://i.scdn.co/image/ab67616d00001e02aa95a399fd30fbb4f6f59fca"},{"a":"Tyler, The Creator","t":"Flower Boy","c":"https://i.scdn.co/image/ab67616d00001e028940ac99f49e44f59e6f7fb3"},{"a":"Tyler, The Creator","t":"IGOR","c":"https://i.scdn.co/image/ab67616d00001e0230a635de2bb0caa4e26f6abb"},{"a":"Anderson .Paak","t":"Malibu","c":"https://i.scdn.co/image/ab67616d00001e02f8e77075414234fd77fce32b"},{"a":"Radiohead","t":"Pablo Honey","c":"https://i.scdn.co/image/ab67616d00001e02ec548c00d3ac2f10be73366d"},{"a":"Radiohead","t":"The Bends","c":"https://i.scdn.co/image/ab67616d00001e029293c743fa542094336c5e12"},{"a":"Vulfmon","t":"Here We Go Jack","c":"https://i.scdn.co/image/ab67616d00001e02b8a033acf62fa19093254ea3"},{"a":"Yebba","t":"Live at Electric Lady","c":"https://i.scdn.co/image/ab67616d00001e023c0979690fc5541c3fdc27a9"},{"a":"Vulfpeck","t":"Live at Madison Square Garden","c":"https://i.scdn.co/image/ab67616d00001e02670e99b5ad2dcd60b7d05dc0"},{"a":"Yebba","t":"Dawn","c":"https://i.scdn.co/image/ab67616d00001e025d9adfcba461d3b755cf2ddb"},{"a":"Big Thief","t":"Dragon New Warm Mountain I Believe In You","c":"https://i.scdn.co/image/ab67616d00001e02608c444310857c06bdc65361"},{"a":"Mid-Air Thief","t":"Crumbling","c":"https://i.scdn.co/image/ab67616d00001e02ce2eaf6dab7809d9ecf27a9f"},{"a":"Carole King","t":"Tapestry","c":"https://i.scdn.co/image/ab67616d00001e0208fe0c9b647742b06d3b9f87"},{"a":"Florence + The Machine","t":"Lungs (Deluxe Version)","c":"https://i.scdn.co/image/ab67616d00001e02003f81b1f4246362638e682d"},{"a":"Tame Impala","t":"InnerSpeaker (10 Year Anniversary Edition)","c":"https://i.scdn.co/image/ab67616d00001e02703add8a8bef1eb6a0fad4f7"},{"a":"Radiohead","t":"OK Computer OKNOTOK 1997 2017","c":"https://i.scdn.co/image/ab67616d00001e02ee58b8ce747da91d69a862cc"},{"a":"Radiohead","t":"A Moon Shaped Pool","c":"https://i.scdn.co/image/ab67616d00001e0245643f5cf119cbc9d2811c22"},{"a":"Radiohead","t":"The King Of Limbs","c":"https://i.scdn.co/image/ab67616d00001e02a9be6a9b8b5831a4c431ab9f"},{"a":"Radiohead","t":"Amnesiac","c":"https://i.scdn.co/image/ab67616d00001e02863e0e305637100311c91aa7"},{"a":"Radiohead","t":"Kid A","c":"https://i.scdn.co/image/ab67616d00001e026c7112082b63beefffe40151"},{"a":"Radiohead","t":"Hail To the Thief","c":"https://i.scdn.co/image/ab67616d00001e020da53e8f58e59f28a79c10c7"},{"a":"Radiohead","t":"In Rainbows (Disk 2)","c":"https://i.scdn.co/image/ab67616d00001e024b88d5c1b3358cca2c94ec0b"},{"a":"Radiohead","t":"In Rainbows","c":"https://i.scdn.co/image/ab67616d00001e02de3c04b5fc750b68899b20a9"},{"a":"Ben Howard","t":"Every Kingdom","c":"https://i.scdn.co/image/ab67616d00001e0225d10f813fd1114b2bb9e39a"},{"a":"Jack White","t":"Blunderbuss","c":"https://i.scdn.co/image/ab67616d00001e0222feba317f16c892a16dde82"},{"a":"Jack White","t":"Lazaretto","c":"https://i.scdn.co/image/ab67616d00001e0275bf15fcbfe07607c6cfeebe"},{"a":"Noga Erez","t":"KIDS","c":"https://i.scdn.co/image/ab67616d00001e02488e610297ff1500051c0b2c"},{"a":"Tame Impala","t":"The Slow Rush","c":"https://i.scdn.co/image/ab67616d00001e0258267bd34420a00d5cf83a49"},{"a":"Hackney Colliery Band","t":"Collaborations: Volume One","c":"https://i.scdn.co/image/ab67616d00001e02dc09dff76244786379de7477"},{"a":"Pearl Jam","t":"MTV Unplugged","c":"https://i.scdn.co/image/ab67616d00001e02aca0cc1823b1f0c81f8e9a28"},{"a":"The Strokes","t":"First Impressions Of Earth","c":"https://i.scdn.co/image/ab67616d00001e026898a982ff3c6049ba52586c"},{"a":"The Strokes","t":"The New Abnormal","c":"https://i.scdn.co/image/ab67616d00001e02e3f1ba3de4659708c25d0f39"},{"a":"Washed Out","t":"Purple Noon","c":"https://i.scdn.co/image/ab67616d00001e029de8ddff18675d7f309b8fca"},{"a":"Tame Impala","t":"InnerSpeaker","c":"https://i.scdn.co/image/ab67616d00001e02176e82d09ac75d62810f0056"},{"a":"Khruangbin","t":"The Universe Smiles Upon You","c":"https://i.scdn.co/image/ab67616d00001e02bc009dcb7578608697771b74"},{"a":"Khruangbin","t":"Con Todo El Mundo","c":"https://i.scdn.co/image/ab67616d00001e02811309a5bbc336e25df4e2ed"},{"a":"Khruangbin","t":"Hasta El Cielo","c":"https://i.scdn.co/image/ab67616d00001e02d8e7bd0188cb34ed2372f762"},{"a":"Khruangbin","t":"Mordechai","c":"https://i.scdn.co/image/ab67616d00001e029ebb959418f1e621f8934faa"},{"a":"Jeff Buckley","t":"Grace","c":"https://i.scdn.co/image/ab67616d00001e02afc2d1d2c8703a10aeded0af"},{"a":"Punch Brothers","t":"The Phosphorescent Blues","c":"https://i.scdn.co/image/ab67616d00001e022f6904c2caa80322f5cb2222"},{"a":"JAŸ-Z","t":"Collision Course","c":"https://i.scdn.co/image/ab67616d00001e02d3acd0f2186daa8e4cb0f65b"},{"a":"Khruangbin","t":"Texas Sun","c":"https://i.scdn.co/image/ab67616d00001e0214c07768d4acc4282a66a61b"},{"a":"Common","t":"Be","c":"https://i.scdn.co/image/ab67616d00001e026c1e31e10c7a5b2ed2258e29"},{"a":"Damien Rice","t":"O","c":"https://i.scdn.co/image/ab67616d00001e02fbf054cdb847f4e042d88642"},{"a":"Anderson .Paak","t":"Ventura","c":"https://i.scdn.co/image/ab67616d00001e02d3382f54ab72c2f4760b6821"},{"a":"Hakeves Hashisha Asar Cast","t":"הכבש השישה עשר","c":"https://i.scdn.co/image/ab67616d00001e02c9aa10c5219b634c5114d72f"},{"a":"Compilation • Bill Evans Trio","t":"The Complete Village Vanguard Recordings, 1961","c":"https://i.scdn.co/image/ab67616d00001e02dcc761b16eb9b3689cd0cfe2"},{"a":"The Strokes","t":"Is This It","c":"https://i.scdn.co/image/ab67616d00001e02a388a3f20d1bf2123249cc79"},{"a":"Brittany Howard","t":"Jaime","c":"https://i.scdn.co/image/ab67616d00001e02fe6fed9ffed5f9357f3a87c0"},{"a":"Vulfpeck","t":"Hill Climber","c":"https://i.scdn.co/image/ab67616d00001e02b90494b5e56f52ae9b7c9660"},{"a":"Vulfpeck","t":"Mr Finish Line","c":"https://i.scdn.co/image/ab67616d00001e023e7b79c0267c3564205a8b4c"},{"a":"Vulfpeck","t":"The Beautiful Game","c":"https://i.scdn.co/image/ab67616d00001e02fc6e5f2e6a7dd1ce3e83a897"},{"a":"Vulfpeck","t":"Thrill of the Arts","c":"https://i.scdn.co/image/ab67616d00001e02d4d231e11ce86d2a6e6f9414"},{"a":"Compilation • The Police","t":"The Police","c":"https://i.scdn.co/image/ab67616d00001e02ea323c465cb97aa95bc68e0d"},{"a":"OneRepublic","t":"Native","c":"https://i.scdn.co/image/ab67616d00001e026f91180b662ca15ad2fb88f0"},{"a":"OneRepublic","t":"Waking Up","c":"https://i.scdn.co/image/ab67616d00001e0277a7bd558d81172446e525bb"},{"a":"Ed Sheeran","t":"No.6 Collaborations Project","c":"https://i.scdn.co/image/ab67616d00001e02f528fc2d5d8b26e4e3413715"},{"a":"Bruno Mars","t":"Doo-Wops & Hooligans","c":"https://i.scdn.co/image/ab67616d00001e028a9eb5a1f701d1d367a5ea10"},{"a":"Bruno Mars","t":"Unorthodox Jukebox","c":"https://i.scdn.co/image/ab67616d00001e02926f43e7cce571e62720fd46"},{"a":"King Crimson","t":"In The Court Of The Crimson King (Expanded & Remastered Original Album Mix)","c":"https://i.scdn.co/image/ab67616d00001e029f2179592d196f575b7a0ff5"},{"a":"Compilation • Shem-Tov Levy","t":"המיטב","c":"https://i.scdn.co/image/ab67616d00001e02b71f041f727a5d78cf373af2"},{"a":"Compilation • Itzhak Klepter","t":"המיטב","c":"https://i.scdn.co/image/ab67616d00001e02f6cc35da53968091441b7eaa"},{"a":"James Blake","t":"Assume Form","c":"https://i.scdn.co/image/ab67616d00001e02534dc6aebb7cf3c04e410cc6"},{"a":"Tom Misch","t":"Geography","c":"https://i.scdn.co/image/ab67616d00001e022aebf42d8901fbcd14c9eca8"},{"a":"Nick Drake","t":"Five Leaves Left","c":"https://i.scdn.co/image/ab67616d00001e02bd158c797b1026005c2917bc"},{"a":"Nick Drake","t":"Pink Moon","c":"https://i.scdn.co/image/ab67616d00001e020f2a198651d9c2e4efad9d18"},{"a":"Kamasi Washington","t":"Heaven and Earth","c":"https://i.scdn.co/image/ab67616d00001e02bb3bdd8d1c813aa7c0ac967f"},{"a":"Nick Drake","t":"Bryter Layter","c":"https://i.scdn.co/image/ab67616d00001e02f624fdadb511452a2093694d"},{"a":"Chance the Rapper","t":"Coloring Book","c":"https://i.scdn.co/image/ab67616d00001e021e4ed4162e520e33be0bf3b0"},{"a":"Mark Ronson","t":"Version","c":"https://i.scdn.co/image/ab67616d00001e026a5beb0500ad6e3b0f7aea22"},{"a":"Compilation • Mark Ronson","t":"Record Collection","c":"https://i.scdn.co/image/ab67616d00001e024e1ce5c19325a80d8300cb64"},{"a":"Mark Ronson","t":"Uptown Special","c":"https://i.scdn.co/image/ab67616d00001e029860171ddfee17f77a570cf6"},{"a":"Tame Impala","t":"Lonerism","c":"https://i.scdn.co/image/ab67616d00001e02370c12f82872c9cfaee80193"},{"a":"Bill Evans Trio","t":"Sunday At The Village Vanguard [Keepnews Collection]","c":"https://i.scdn.co/image/ab67616d00001e021fa735fc5a555f64edacca2b"},{"a":"Radiohead","t":"Hail To the Thief","c":"https://i.scdn.co/image/ab67616d00001e0295347e34e39c67bbf9f36c49"},{"a":"Nothing But Thieves","t":"Graveyard Whistling - EP","c":"https://i.scdn.co/image/ab67616d00001e024069f81fa1e4cabd10cd6499"},{"a":"Temple Of The Dog","t":"Temple Of The Dog","c":"https://i.scdn.co/image/ab67616d00001e023878341a3f63452fe3788307"},{"a":"Foo Fighters","t":"Foo Fighters","c":"https://i.scdn.co/image/ab67616d00001e0252844939eaf38ec62110fcde"},{"a":"Foo Fighters","t":"The Colour And The Shape","c":"https://i.scdn.co/image/ab67616d00001e024bc9bcdbdc9ac34e37d8b6bb"},{"a":"Foo Fighters","t":"There Is Nothing Left To Lose","c":"https://i.scdn.co/image/ab67616d00001e026c52084ed1f1748f213783b3"},{"a":"Foo Fighters","t":"One By One (Expanded Edition)","c":"https://i.scdn.co/image/ab67616d00001e02bfff163b0602156a983fa079"},{"a":"Foo Fighters","t":"In Your Honor","c":"https://i.scdn.co/image/ab67616d00001e0250d3fff0dc3d9b55f164d8d6"},{"a":"Foo Fighters","t":"Skin And Bones","c":"https://i.scdn.co/image/ab67616d00001e029b0fe5368da44ee2f5518c16"},{"a":"Foo Fighters","t":"Echoes, Silence, Patience & Grace","c":"https://i.scdn.co/image/ab67616d00001e029d957247c6c610cb7c4da1c5"},{"a":"Foo Fighters","t":"Wasting Light (Deluxe Version)","c":"https://i.scdn.co/image/ab67616d00001e02a140d4b7991d2dde3821b7b1"},{"a":"Foo Fighters","t":"Concrete and Gold","c":"https://i.scdn.co/image/ab67616d00001e02c0fc3e2ea7df505a73658846"},{"a":"Foo Fighters","t":"Sonic Highways","c":"https://i.scdn.co/image/ab67616d00001e02d12b9349b2ab140c4f6364e0"},{"a":"Compilation • Queen","t":"Greatest Hits III","c":"https://i.scdn.co/image/ab67616d00001e02a12daf02bea0c11ac2be610a"},{"a":"Compilation • Queen","t":"Greatest Hits II (Remastered)","c":"https://i.scdn.co/image/ab67616d00001e02f7c223721f1d860395444dbe"},{"a":"Compilation • Queen","t":"Greatest Hits (Remastered)","c":"https://i.scdn.co/image/ab67616d00001e02bb19d0c22d5709c9d73c8263"},{"a":"Adele","t":"19","c":"https://i.scdn.co/image/ab67616d00001e020a5d334a63fd4455ce83b38b"},{"a":"Adele","t":"25","c":"https://i.scdn.co/image/ab67616d00001e025ffbbc3dca25d5c81491af1f"},{"a":"Adele","t":"21","c":"https://i.scdn.co/image/ab67616d00001e02ba764098164f221484bcc309"},{"a":"Led Zeppelin","t":"Houses of the Holy (Remaster)","c":"https://i.scdn.co/image/ab67616d00001e021aa47e71c4edfeaddb65cd54"},{"a":"Led Zeppelin","t":"Led Zeppelin IV (Remaster)","c":"https://i.scdn.co/image/ab67616d00001e024509204d0860cc0cc67e83dc"},{"a":"Led Zeppelin","t":"Led Zeppelin III (Remaster)","c":"https://i.scdn.co/image/ab67616d00001e0290a50cfe99a4c19ff3cbfbdb"},{"a":"Led Zeppelin","t":"Led Zeppelin II (Remaster)","c":"https://i.scdn.co/image/ab67616d00001e02f396ea414b735ef23e2ed1a9"},{"a":"Led Zeppelin","t":"Led Zeppelin (Remaster)","c":"https://i.scdn.co/image/ab67616d00001e02c77c73285cc5cb64d97e1b0f"},{"a":"Keane","t":"Under The Iron Sea","c":"https://i.scdn.co/image/ab67616d00001e02fd9c1bba280f7bc89e70e736"},{"a":"Keane","t":"Hopes and Fears (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e023ed7f5bfbaa00a3825740773"},{"a":"Twenty One Pilots","t":"TOPxMM","c":"https://i.scdn.co/image/ab67616d00001e02aa53cf116c616b262b59742a"},{"a":"The Kooks","t":"Let's Go Sunshine","c":"https://i.scdn.co/image/ab67616d00001e02fe6874ecaf81a53e4f5a107a"},{"a":"Hozier","t":"Nina Cried Power - EP","c":"https://i.scdn.co/image/ab67616d00001e022b7602b7fc3ae12497b9de55"},{"a":"Dua Lipa","t":"Dua Lipa (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e025966dfc026a261d899bc9d54"},{"a":"Sheshet","t":"ששת","c":"https://i.scdn.co/image/ab67616d00001e028e065d920618cf882ad813f2"},{"a":"Gazoz","t":"גזוז - 20 הלהיטים","c":"https://i.scdn.co/image/ab67616d00001e02d61c4206ce052b1f210bdf91"},{"a":"Vampire Weekend","t":"Vampire Weekend","c":"https://i.scdn.co/image/ab67616d00001e0201e2ebfbf4f8147621c8a866"},{"a":"Vampire Weekend","t":"Contra","c":"https://i.scdn.co/image/ab67616d00001e022efbbd3b97ac33268266b805"},{"a":"Vampire Weekend","t":"Modern Vampires of the City","c":"https://i.scdn.co/image/ab67616d00001e0209f8dd8bf944e66b585fe708"},{"a":"Twenty One Pilots","t":"Jumpsuit / Levitate / Nico And The Niners","c":"https://i.scdn.co/image/ab67616d00001e02cbdf4879d2607221b6a49908"},{"a":"Twenty One Pilots","t":"Twenty One Pilots","c":"https://i.scdn.co/image/ab67616d00001e024f5687326079d90e731a10a6"},{"a":"Twenty One Pilots","t":"Vessel","c":"https://i.scdn.co/image/ab67616d00001e026caad685af37c08063be928d"},{"a":"Twenty One Pilots","t":"Blurryface","c":"https://i.scdn.co/image/ab67616d00001e022df0d98a423025032d0db1f7"},{"a":"Tom Odell","t":"Long Way Down (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e021917a0f3f4152622a040913f"},{"a":"Tom Odell","t":"Wrong Crowd (Expanded Edition)","c":"https://i.scdn.co/image/ab67616d00001e02f62424a7d95b11d99e09182e"},{"a":"Thundercat","t":"Drunk","c":"https://i.scdn.co/image/ab67616d00001e0285c5e6c686ced3e43bae2748"},{"a":"TATRAN","t":"No Sides","c":"https://i.scdn.co/image/ab67616d00001e021321ea3c16d56afce975b248"},{"a":"TATRAN","t":"Shvat","c":"https://i.scdn.co/image/ab67616d00001e02ac9b1a67fe14a72eb82cf8d9"},{"a":"The Strokes","t":"First Impressions Of Earth","c":"https://i.scdn.co/image/ab67616d00001e029ce174dc6c2c92a8cadc4c9c"},{"a":"Snarky Puppy","t":"We Like It Here","c":"https://i.scdn.co/image/ab67616d00001e02a29d1ada28cf3d9d5fe1972d"},{"a":"Royal Blood","t":"How Did We Get So Dark?","c":"https://i.scdn.co/image/ab67616d00001e0294b63000190c83e4dc4ea064"},{"a":"Royal Blood","t":"Royal Blood","c":"https://i.scdn.co/image/ab67616d00001e028c23906cd30a0564bcebb5e5"},{"a":"Robert Glasper","t":"Black Radio","c":"https://i.scdn.co/image/ab67616d00001e021a76b24f7385acff6d8e57c7"},{"a":"Red Hot Chili Peppers","t":"Blood Sugar Sex Magik (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e02153d79816d853f2694b2cc70"},{"a":"Red Hot Chili Peppers","t":"One Hot Minute (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e027f3dcf99224570b053294ccf"},{"a":"Red Hot Chili Peppers","t":"Californication (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e0294d08ab63e57b0cae74e8595"},{"a":"Red Hot Chili Peppers","t":"By the Way (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e02de1af2785a83cc660155a0c4"},{"a":"Red Hot Chili Peppers","t":"Stadium Arcadium","c":"https://i.scdn.co/image/ab67616d00001e0209fd83d32aee93dceba78517"},{"a":"Pharrell Williams","t":"G I R L","c":"https://i.scdn.co/image/ab67616d00001e02d005b5fa12875efb624e8e12"},{"a":"Pearl Jam","t":"Ten","c":"https://i.scdn.co/image/ab67616d00001e022d0e5ab5bd2e234fbcffa3e0"},{"a":"Nothing But Thieves","t":"Broken Machine (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e026ff76d00ab7563327baf49d2"},{"a":"Noname","t":"Telefone","c":"https://i.scdn.co/image/ab67616d00001e02e9ef4d0bab9c9bf9ef5d3f36"},{"a":"Mutemath","t":"Play Dead","c":"https://i.scdn.co/image/ab67616d00001e024cd26e154b99dc8001032044"},{"a":"The Kooks","t":"Inside In / Inside Out","c":"https://i.scdn.co/image/ab67616d00001e0263a28c5ecb7b13e9b329fe47"},{"a":"The Kooks","t":"Konk (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e02a351e38dbc7dcdf48b48b4a8"},{"a":"The Kooks","t":"Junk Of The Heart","c":"https://i.scdn.co/image/ab67616d00001e022c0cad5c0471aac7bfbc1b5d"},{"a":"The Kooks","t":"Listen (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e02b5b6e78f2b39a0f25466cf7b"},{"a":"Kings of Leon","t":"Youth And Young Manhood","c":"https://i.scdn.co/image/ab67616d00001e025aa0037aeff1b824be1449fe"},{"a":"Kings of Leon","t":"Aha Shake Heartbreak","c":"https://i.scdn.co/image/ab67616d00001e025fb916bd4c91cfab17a97a3e"},{"a":"Kings of Leon","t":"Because Of The Times","c":"https://i.scdn.co/image/ab67616d00001e024cee247bafe27eb9f8c2ce1d"},{"a":"Kings of Leon","t":"Only By The Night","c":"https://i.scdn.co/image/ab67616d00001e022519d01c0cca06f134eeadd8"},{"a":"Kings of Leon","t":"Come Around Sundown (Expanded Edition)","c":"https://i.scdn.co/image/ab67616d00001e02496ed45f8f3dddaf410fd86e"},{"a":"Kings of Leon","t":"Mechanical Bull (Expanded Edition)","c":"https://i.scdn.co/image/ab67616d00001e027516b0140ce03ef97600fb03"},{"a":"Kings of Leon","t":"WALLS","c":"https://i.scdn.co/image/ab67616d00001e0201c7589cbd3d4e86cc858511"},{"a":"KALEO","t":"A/B","c":"https://i.scdn.co/image/ab67616d00001e02f793a842c1642b09a768a63b"},{"a":"Kakkmaddafakka","t":"Hus","c":"https://i.scdn.co/image/ab67616d00001e02114cfb23121a9727c8f37632"},{"a":"Justin Timberlake","t":"The 20/20 Experience - The Complete Experience","c":"https://i.scdn.co/image/ab67616d00001e0282a45e108688cb14f5255de7"},{"a":"Justin Timberlake","t":"Man of the Woods","c":"https://i.scdn.co/image/ab67616d00001e02d444296aa0ca8fada177e430"},{"a":"John Mayer","t":"Where the Light Is: John Mayer Live In Los Angeles","c":"https://i.scdn.co/image/ab67616d00001e025b9c332f9f76cabc137e400f"},{"a":"Jeff Buckley","t":"Grace (Legacy Edition)","c":"https://i.scdn.co/image/ab67616d00001e02c9e961be2679c41930a370cd"},{"a":"Jamiroquai","t":"Travelling Without Moving","c":"https://i.scdn.co/image/ab67616d00001e021a34b380dc283479f2b8a02b"},{"a":"Jack Johnson","t":"On And On","c":"https://i.scdn.co/image/ab67616d00001e024a25251f8c645064ebdec45b"},{"a":"Jack Johnson","t":"In Between Dreams","c":"https://i.scdn.co/image/ab67616d00001e02628dba01c669d89586967dc5"},{"a":"Imagine Dragons","t":"Night Visions (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e02ef2e4d695cb2d76681855b8f"},{"a":"Imagine Dragons","t":"Smoke + Mirrors (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e0259ac0a9acb7bf0d315301152"},{"a":"Hozier","t":"Hozier (Special Edition)","c":"https://i.scdn.co/image/ab67616d00001e022303ece0e9af3917d0bce05f"},{"a":"Half Moon Run","t":"Dark Eyes","c":"https://i.scdn.co/image/ab67616d00001e02c200077c4c009128dc53ffb9"},{"a":"Half Moon Run","t":"Sun Leads Me On","c":"https://i.scdn.co/image/ab67616d00001e02dc008e49c28baf0c058d4a13"},{"a":"George Ezra","t":"Wanted on Voyage","c":"https://i.scdn.co/image/ab67616d00001e022b01e29ac167ad5be48f03ef"},{"a":"George Ezra","t":"Staying at Tamara's","c":"https://i.scdn.co/image/ab67616d00001e024dc97826ec57146f19c8e228"},{"a":"Florence + The Machine","t":"Between Two Lungs","c":"https://i.scdn.co/image/ab67616d00001e028fcd165e3cc600c1364eb6bc"},{"a":"Florence + The Machine","t":"Ceremonials (Original Deluxe Version)","c":"https://i.scdn.co/image/ab67616d00001e026a8c1075f751a78e0b7799c7"},{"a":"Florence + The Machine","t":"How Big, How Blue, How Beautiful (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e027f89eb18e64f268561d81c42"},{"a":"Florence + The Machine","t":"High As Hope","c":"https://i.scdn.co/image/ab67616d00001e02d36d0f06096fa07f18b8e8a2"},{"a":"Fleet Foxes","t":"Fleet Foxes","c":"https://i.scdn.co/image/ab67616d00001e025a6f22825fd502166c181564"},{"a":"Fleet Foxes","t":"Helplessness Blues","c":"https://i.scdn.co/image/ab67616d00001e023dca8b5cb35c280ca191c28f"},{"a":"Fleet Foxes","t":"Crack-Up","c":"https://i.scdn.co/image/ab67616d00001e0271b24e854cdd7633cb5baaa7"},{"a":"Coldplay","t":"Brothers & Sisters","c":"https://i.scdn.co/image/ab67616d00001e0284bd6cc1508f9c21064beb34"},{"a":"Coldplay","t":"A Rush of Blood to the Head","c":"https://i.scdn.co/image/ab67616d00001e02de09e02aa7febf30b7c02d82"},{"a":"Coldplay","t":"X&Y","c":"https://i.scdn.co/image/ab67616d00001e024e0362c225863f6ae2432651"},{"a":"Coldplay","t":"Viva La Vida (Prospekt's March Edition)","c":"https://i.scdn.co/image/ab67616d00001e02121b47fdc79958a05e67fb17"},{"a":"Coldplay","t":"A Head Full of Dreams","c":"https://i.scdn.co/image/ab67616d00001e028ff7c3580d429c8212b9a3b6"},{"a":"Eddie Vedder","t":"Into The Wild (Music For The Motion Picture)","c":"https://i.scdn.co/image/ab67616d00001e023ed52339ae78ac1b695e8d80"},{"a":"Ed Sheeran","t":"+","c":"https://i.scdn.co/image/ab67616d00001e026567a393a964a845a89b7f70"},{"a":"Ed Sheeran","t":"x (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e0213b3e37318a0c247b550bccd"},{"a":"Ed Sheeran","t":"÷ (Deluxe)","c":"https://i.scdn.co/image/ab67616d00001e02ba5db46f4b838ef6027e6f96"},{"a":"Childish Gambino","t":"\"Awaken, My Love!\"","c":"https://i.scdn.co/image/ab67616d00001e020b97e56ffad7c6211aa848f8"},{"a":"Bruno Mars","t":"24K Magic","c":"https://i.scdn.co/image/ab67616d00001e02232711f7d66a1e19e89e28c5"},{"a":"The Black Keys","t":"Brothers (Deluxe Edition)","c":"https://i.scdn.co/image/ab67616d00001e028f5567f5c20e8d5882c37afa"},{"a":"The Black Keys","t":"El Camino","c":"https://i.scdn.co/image/ab67616d00001e026a21b97de47168df4f0c1993"},{"a":"The Black Keys","t":"Turn Blue","c":"https://i.scdn.co/image/ab67616d00001e021af8fb0d8859055d35d2290f"},{"a":"Beck","t":"Sea Change","c":"https://i.scdn.co/image/ab67616d00001e02e7fc5b50ff71f92809db9d79"},{"a":"Beck","t":"Morning Phase","c":"https://i.scdn.co/image/ab67616d00001e02f585024d184f024efbd5d3a1"},{"a":"Beck","t":"Colors","c":"https://i.scdn.co/image/ab67616d00001e0285c5d4eeba7c22b3df57e054"},{"a":"Arctic Monkeys","t":"Whatever People Say I Am, That's What I'm Not","c":"https://i.scdn.co/image/ab67616d00001e026b3fa88bdd4af566fbbf2bbf"},{"a":"Arctic Monkeys","t":"Favourite Worst Nightmare","c":"https://i.scdn.co/image/ab67616d00001e02b1f8da74f225fa1225cdface"},{"a":"Arctic Monkeys","t":"Humbug","c":"https://i.scdn.co/image/ab67616d00001e02f65d720a5d70dbb93e96d528"},{"a":"Arctic Monkeys","t":"Suck It and See","c":"https://i.scdn.co/image/ab67616d00001e02cb44038b22f3d8a5e4e62d5a"},{"a":"Arctic Monkeys","t":"AM","c":"https://i.scdn.co/image/ab67616d00001e024ae1c4c5c45aabe565499163"},{"a":"Arctic Monkeys","t":"Tranquility Base Hotel & Casino","c":"https://i.scdn.co/image/ab67616d00001e028895ff0f90525f4aa9437c27"},{"a":"Anderson .Paak","t":"Malibu","c":"https://i.scdn.co/image/ab67616d00001e025e149abf2d24cd29e40c6b84"},{"a":"Alice In Chains","t":"Unplugged","c":"https://i.scdn.co/image/ab67616d00001e02f2b6bebda774909d71e0f796"},{"a":"Alabama Shakes","t":"Boys & Girls","c":"https://i.scdn.co/image/ab67616d00001e02b7890b6f5761f350fbb4759d"},{"a":"Alabama Shakes","t":"Sound & Color","c":"https://i.scdn.co/image/ab67616d00001e02965f1a626c0d8667af96d7d3"},{"a":"Tame Impala","t":"InnerSpeaker","c":"https://i.scdn.co/image/ab67616d00001e02cbcddf5b9309f972363ae406"},{"a":"Radiohead","t":"Pablo Honey","c":"https://i.scdn.co/image/ab67616d00001e022f85b65d3ac4d3d7f806ca11"},{"a":"Radiohead","t":"The Bends","c":"https://i.scdn.co/image/ab67616d00001e0222ca59e5c2d806439d5f08a2"},{"a":"Radiohead","t":"Kid A","c":"https://i.scdn.co/image/ab67616d00001e02c174bffb607ee576329291a6"},{"a":"Radiohead","t":"Amnesiac","c":"https://i.scdn.co/image/ab67616d00001e0201b50e75c5aa46fb8ce0cd32"},{"a":"Radiohead","t":"In Rainbows (Disk 2)","c":"https://i.scdn.co/image/ab67616d00001e0271e557eb2af8e08ec44bfc84"},{"a":"Radiohead","t":"In Rainbows","c":"https://i.scdn.co/image/ab67616d00001e0234733f87148c2fbe0176abdb"},{"a":"Radiohead","t":"The King Of Limbs","c":"https://i.scdn.co/image/ab67616d00001e0205a4283aa0b76ffaf9a84fee"},{"a":"Radiohead","t":"A Moon Shaped Pool","c":"https://i.scdn.co/image/ab67616d00001e020365011d800890bd210dd043"},{"a":"Radiohead","t":"OK Computer OKNOTOK 1997 2017","c":"https://i.scdn.co/image/ab67616d00001e020797b2dcca7a453c3374c599"},{"a":"Ben Howard","t":"Every Kingdom (Deluxe Version)","c":"https://i.scdn.co/image/ab67616d00001e02b90fb62545586c772a28abd4"},{"a":"Ben Howard","t":"I Forget Where We Were","c":"https://i.scdn.co/image/ab67616d00001e026b66e9099c7a66e58658f512"},{"a":"Ben Howard","t":"Noonday Dream","c":"https://i.scdn.co/image/ab67616d00001e0292c2c7a51d8009481a211067"},{"a":"Tame Impala","t":"Currents","c":"https://i.scdn.co/image/ab67616d00001e029e1cfc756886ac782e363d79"},{"a":"Imagine Dragons","t":"Evolve","c":"https://i.scdn.co/image/ab67616d00001e025675e83f707f1d7271e5cf8a"},{"a":"The Head And The Heart","t":"Signs of Light","c":"https://i.scdn.co/image/ab67616d00001e02dfe6d44ebdfdc45c6f14d73b"},{"a":"MISSIO","t":"Bottom Of The Deep Blue Sea","c":"https://i.scdn.co/image/ab67616d00001e02bff68c5f58bc5033f774f64b"}];
+
+    (function buildDriftingWall() {
+      const wall = document.getElementById("wall");
+      if (!wall) return;
+
+      // Fisher-Yates shuffle on a copy so columns feel varied, not grouped by artist.
+      function shuffled(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      let cursor = 0;
+      const deck = shuffled(ALBUMS);
+      function nextAlbum() {
+        const item = deck[cursor % deck.length];
+        cursor++;
+        return item;
+      }
+
+      function makeTile(album) {
+        const img = document.createElement("img");
+        img.className = "wall-tile";
+        img.src = album.c;
+        img.alt = "";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.draggable = false;
+        return img;
+      }
+
+      let built = false;
+      function render() {
+        // Measure column width from the CSS variable via a probe element.
+        const probe = document.createElement("div");
+        probe.style.cssText = "flex:0 0 var(--col-w);width:var(--col-w);";
+        wall.appendChild(probe);
+        const colW = probe.getBoundingClientRect().width || 150;
+        wall.removeChild(probe);
+
+        const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gap")) || 14;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        // Enough columns to cover the width plus a little bleed on both sides.
+        const cols = Math.ceil((vw + colW) / (colW + gap)) + 1;
+        // Tiles per column so one stack is taller than the viewport (seamless -50% loop).
+        const perCol = Math.max(6, Math.ceil((vh * 1.35) / (colW + gap)) + 2);
+
+        cursor = 0;
+        wall.innerHTML = "";
+        const frag = document.createDocumentFragment();
+
+        for (let c = 0; c < cols; c++) {
+          const col = document.createElement("div");
+          col.className = "wall-col";
+          col.dataset.dir = c % 2 === 0 ? "up" : "down";
+
+          const track = document.createElement("div");
+          track.className = "wall-track";
+          // Slow, gently varied drift: 150s to 260s.
+          const dur = 150 + (c * 37) % 110;
+          track.style.setProperty("--dur", dur + "s");
+          track.style.setProperty("--delay", "-" + ((c * 17) % dur) + "s");
+
+          const stack = document.createDocumentFragment();
+          for (let t = 0; t < perCol; t++) stack.appendChild(makeTile(nextAlbum()));
+          track.appendChild(stack.cloneNode(true)); // first copy
+          track.appendChild(stack);                 // second copy -> seamless loop
+          col.appendChild(track);
+          frag.appendChild(col);
+        }
+        wall.appendChild(frag);
+        built = true;
+      }
+
+      render();
+
+      // Rebuild on significant resize so coverage stays correct across orientations.
+      let last = window.innerWidth;
+      let timer = null;
+      window.addEventListener("resize", function () {
+        if (Math.abs(window.innerWidth - last) < 80 && built) return;
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          last = window.innerWidth;
+          render();
+        }, 250);
+      });
+
+      // Pausable: freeze the drift while the tab is hidden (saves work, calms return).
+      document.addEventListener("visibilitychange", function () {
+        wall.querySelectorAll(".wall-track").forEach(function (tr) {
+          tr.style.animationPlayState = document.hidden ? "paused" : "running";
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
